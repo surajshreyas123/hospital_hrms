@@ -1,0 +1,89 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Login | Hospital HRMS</title>
+
+    <link rel="stylesheet" href="{% static 'hr/css/theme.css' %}">
+</head>
+
+<body class="auth-page">
+
+    <main class="auth-card">
+
+        <div class="auth-brand">
+            <span class="brand-mark">H+</span>
+        </div>
+
+        <div class="eyebrow">HOSPITAL WORKFORCE PORTAL</div>
+
+        <h1>Welcome back</h1>
+
+        <p class="muted">
+            Sign in to manage your hospital HR workspace.
+        </p>
+
+        {% if form.errors %}
+            <div class="alert alert-error">
+                The username or password is incorrect. Please try again.
+            </div>
+        {% endif %}
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags|default:'info' }}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <form method="post"
+              action="{% url 'login' %}"
+              class="form-layout">
+
+            {% csrf_token %}
+
+            <input type="hidden" name="next" value="{{ next }}">
+
+            <div class="form-field">
+                <label for="id_username">Username</label>
+                <input
+                    id="id_username"
+                    name="username"
+                    type="text"
+                    autocomplete="username"
+                    required
+                    autofocus
+                >
+            </div>
+
+            <div class="form-field">
+                <label for="id_password">Password</label>
+                <input
+                    id="id_password"
+                    name="password"
+                    type="password"
+                    autocomplete="current-password"
+                    required
+                >
+            </div>
+
+            <button class="btn btn-primary btn-full" type="submit">
+                Sign in
+            </button>
+
+        </form>
+
+        <p class="auth-bottom">
+            <a href="{% url 'password_reset' %}">
+                Forgot your password?
+            </a>
+        </p>
+
+    </main>
+
+</body>
+</html>

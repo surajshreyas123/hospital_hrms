@@ -1,0 +1,10 @@
+{% extends "hr/base.html" %}
+{% block title %}Birthday Calendar | Hospital HRMS{% endblock %}
+{% block page_heading %}Birthday Calendar{% endblock %}
+{% block content %}
+<div class="page-toolbar"><div><h2>Staff birthdays</h2><p class="muted">Upcoming birthdays for active employees.</p></div><form method="get" class="month-picker"><label for="month">Month</label><input id="month" type="month" name="month" value="{{ selected_month }}"><button class="btn btn-primary" type="submit">View</button></form></div>
+<section class="panel"><div class="panel-heading"><div><h3>{{ month_title|default:"Birthday list" }}</h3><p class="muted">Birthdays for the selected month</p></div></div>
+<div class="birthday-grid">{% for employee in birthdays %}
+  <article class="birthday-card"><div class="birthday-date"><strong>{{ employee.birthday|date:"d" }}</strong><span>{{ employee.birthday|date:"M" }}</span></div><div><strong>{{ employee.name }}</strong><small>{{ employee.designation }} · {{ employee.department.name }}</small></div><a href="{% url 'employee_profile' employee.pk %}" aria-label="View {{ employee.name }} profile">→</a></article>
+{% empty %}<p class="empty">No birthdays found for this month.</p>{% endfor %}</div></section>
+{% endblock %}

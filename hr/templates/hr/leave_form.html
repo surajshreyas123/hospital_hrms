@@ -1,0 +1,81 @@
+
+{% extends "hr/base.html" %}
+
+{% block title %}Request Leave | Hospital HRMS{% endblock %}
+{% block page_heading %}Request Leave{% endblock %}
+
+{% block content %}
+
+<div class="narrow-panel panel">
+
+    <div class="panel-heading">
+        <div>
+            <h2>Leave Application</h2>
+            <p class="muted">
+                Choose your leave dates and explain the reason for your request.
+            </p>
+        </div>
+    </div>
+
+    <div class="alert">
+        Your request will remain pending until an authorized manager
+        or administrator reviews it.
+    </div>
+
+    <form method="post" class="form-layout">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="alert alert-error">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        {% for field in form %}
+            <div class="form-field">
+
+                <label for="{{ field.id_for_label }}">
+                    {{ field.label }}
+
+                    {% if field.field.required %}
+                        <span class="required">*</span>
+                    {% endif %}
+                </label>
+
+                {{ field }}
+
+                {% if field.help_text %}
+                    <small class="muted">
+                        {{ field.help_text }}
+                    </small>
+                {% endif %}
+
+                {% for error in field.errors %}
+                    <small class="field-error">
+                        {{ error }}
+                    </small>
+                {% endfor %}
+
+            </div>
+        {% endfor %}
+
+        <div class="form-actions">
+            <button class="btn btn-primary" type="submit">
+                Submit Leave Request
+            </button>
+
+            {% if perms.hr.view_leave_pages %}
+                <a class="btn btn-light" href="{% url 'leave_list' %}">
+                    Cancel
+                </a>
+            {% else %}
+                <a class="btn btn-light" href="{% url 'dashboard' %}">
+                    Cancel
+                </a>
+            {% endif %}
+        </div>
+
+    </form>
+</div>
+
+{% endblock %}

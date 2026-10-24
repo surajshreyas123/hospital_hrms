@@ -1,0 +1,248 @@
+{% extends "hr/base.html" %}
+
+{% block title %}
+    {{ page_title|default:"Employee Form" }} | Hospital HRMS
+{% endblock %}
+
+{% block page_heading %}
+    {{ page_title|default:"Employee Form" }}
+{% endblock %}
+
+{% block content %}
+
+<style>
+    .employee-form-panel {
+        max-width: 850px;
+        margin: 0 auto;
+        padding: 28px;
+        background: #fff;
+        border-radius: 16px;
+        box-shadow: 0 4px 18px rgba(35, 25, 70, 0.08);
+    }
+
+    .employee-form-heading {
+        margin-bottom: 24px;
+        padding-bottom: 18px;
+        border-bottom: 1px solid #e9e4f5;
+    }
+
+    .employee-form-heading h2 {
+        margin: 0 0 8px;
+        color: #392b68;
+    }
+
+    .employee-form-heading p {
+        color: #77758a;
+        line-height: 1.6;
+    }
+
+    .employee-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+    }
+
+    .employee-form-field {
+        min-width: 0;
+    }
+
+    .employee-form-field.full-width {
+        grid-column: 1 / -1;
+    }
+
+    .employee-form-field label {
+        display: block;
+        margin-bottom: 8px;
+        color: #37304e;
+        font-weight: 700;
+        font-size: 14px;
+    }
+
+    .employee-form-field input,
+    .employee-form-field select,
+    .employee-form-field textarea {
+        box-sizing: border-box;
+        width: 100%;
+        padding: 12px 13px;
+        border: 1px solid #d9d5e8;
+        border-radius: 8px;
+        background: #fff;
+        color: #302944;
+        font-size: 14px;
+    }
+
+    .employee-form-field input:focus,
+    .employee-form-field select:focus,
+    .employee-form-field textarea:focus {
+        outline: none;
+        border-color: #7952cc;
+        box-shadow: 0 0 0 3px rgba(121, 82, 204, 0.12);
+    }
+
+    .employee-required {
+        margin-left: 4px;
+        color: #dc2626;
+    }
+
+    .employee-help {
+        display: block;
+        margin-top: 6px;
+        color: #77758a;
+        font-size: 12px;
+    }
+
+    .employee-field-error {
+        display: block;
+        margin-top: 6px;
+        color: #b42318;
+        font-size: 13px;
+    }
+
+    .employee-error-box {
+        margin-bottom: 20px;
+        padding: 14px 16px;
+        border: 1px solid #fecaca;
+        border-radius: 9px;
+        background: #fef2f2;
+        color: #991b1b;
+    }
+
+    .employee-error-box ul {
+        margin: 8px 0 0;
+        padding-left: 20px;
+    }
+
+    .employee-form-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 28px;
+        padding-top: 20px;
+        border-top: 1px solid #e9e4f5;
+    }
+
+    .employee-btn {
+        display: inline-block;
+        padding: 11px 18px;
+        border: 0;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 700;
+        text-decoration: none;
+        cursor: pointer;
+    }
+
+    .employee-btn-primary {
+        background: #6246a5;
+        color: #fff;
+    }
+
+    .employee-btn-primary:hover {
+        background: #4c3285;
+    }
+
+    .employee-btn-secondary {
+        background: #e9f3ff;
+        color: #245a91;
+    }
+
+    @media (max-width: 600px) {
+        .employee-form-panel {
+            padding: 18px;
+        }
+
+        .employee-form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .employee-form-field.full-width {
+            grid-column: auto;
+        }
+    }
+</style>
+
+<div class="panel employee-form-panel">
+
+    <div class="employee-form-heading">
+        <h2>{{ page_title|default:"Employee Details" }}</h2>
+        <p>
+            Enter employee details and login credentials.
+            Fields marked with * are required.
+        </p>
+    </div>
+
+    <form method="post" class="form-layout">
+        {% csrf_token %}
+
+        {% if form.non_field_errors or form.errors %}
+            <div class="employee-error-box">
+                <strong>Please correct the following errors:</strong>
+
+                {% if form.non_field_errors %}
+                    {{ form.non_field_errors }}
+                {% endif %}
+
+                <ul>
+                    {% for field in form %}
+                        {% for error in field.errors %}
+                            <li>{{ field.label }}: {{ error }}</li>
+                        {% endfor %}
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+
+        <div class="employee-form-grid">
+            {% for field in form %}
+                <div class="employee-form-field
+                    {% if field.name == 'name' or field.name == 'department' %}
+                        full-width
+                    {% endif %}
+                ">
+                    <label for="{{ field.id_for_label }}">
+                        {{ field.label }}
+                        {% if field.field.required %}
+                            <span class="employee-required">*</span>
+                        {% endif %}
+                    </label>
+
+                    {{ field }}
+
+                    {% if field.help_text %}
+                        <small class="employee-help">
+                            {{ field.help_text }}
+                        </small>
+                    {% endif %}
+
+                    {% for error in field.errors %}
+                        <small class="employee-field-error">
+                            {{ error }}
+                        </small>
+                    {% endfor %}
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="employee-form-actions">
+            <button
+                class="employee-btn employee-btn-primary"
+                type="submit"
+            >
+                {% if form.instance.pk %}
+                    Update Employee
+                {% else %}
+                    Save Employee
+                {% endif %}
+            </button>
+
+            <a
+                class="employee-btn employee-btn-secondary"
+                href="{% url 'employee_list' %}"
+            >
+                Cancel
+            </a>
+        </div>
+    </form>
+</div>
+
+{% endblock %}

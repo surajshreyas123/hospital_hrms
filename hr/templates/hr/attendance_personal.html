@@ -1,0 +1,491 @@
+{% extends "hr/base.html" %}
+{% block title %}My Attendance | Hospital HRMS{% endblock %}
+{% block page_heading %}My Attendance{% endblock %}
+
+{% block content %}
+<style>
+  .wifi-status-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .wifi-status-card.connected {
+    background: #dcfce7;
+    border: 1px solid #86efac;
+    color: #15803d;
+  }
+  .wifi-status-card.disconnected {
+    background: #fee2e2;
+    border: 1px solid #fca5a5;
+    color: #b91c1c;
+  }
+</style>
+
+<div class="page-toolbar" style="margin-bottom: 20px;">
+  <div>
+    <h2>My Attendance</h2>
+    <p class="muted">Joined on <strong>{{ joining_date|date:"d M Y" }}</strong> &bull; Attendance history for <strong>{{
+        employee.name }}</strong> ({{ employee.employee_id }} &bull; {{ employee.department.name }})</p>
+  </div>
+  {% if is_hr_admin %}
+  <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+    <!-- Register Current Wi-Fi -->
+    <form method="post" style="display: inline;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="register_hospital_wifi">
+      <button type="submit" class="btn btn-light btn-small"
+        title="Register your current Wi-Fi network (IP: {{ client_ip }}) as authorized Hospital Wi-Fi"
+        onclick="return confirm('Register current network (IP: {{ client_ip }}) as authorized {{ hospital_setting.wifi_name }}?');">
+        <span>📶</span> Register Current Wi-Fi
+      </button>
+    </form>
+
+    <!-- Calibrate GPS -->
+    <form method="post" id="adminLocationForm" style="display: inline;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="set_hospital_location">
+      <input type="hidden" name="latitude" id="adminLat">
+      <input type="hidden" name="longitude" id="adminLon">
+      <button type="button" class="btn btn-light btn-small" onclick="setHospitalToCurrentLocation()"
+        title="Set Hospital Geofence center to your current device GPS location">
+        <span>📍</span> Calibrate GPS
+      </button>
+    </form>
+
+    <!-- Toggle Verification Mode Dropdown/Form -->
+    <form method="post" style="display: inline-flex; align-items: center; gap: 4px;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="update_verification_settings">
+      <select name="verification_mode" onchange="this.form.submit()"
+        style="padding: 5px 8px; font-size: 12px; font-weight: 600; border-radius: 6px; border: 1px solid var(--border); background: #ffffff; cursor: pointer;"
+        title="Change Verification Requirement">
+        <option value="WIFI_ONLY" {% if hospital_setting.verification_mode == "WIFI_ONLY" %}selected{% endif %}>📶 Mode: Wi-Fi Only</option>
+        <option value="GPS_ONLY" {% if hospital_setting.verification_mode == "GPS_ONLY" %}selected{% endif %}>📍 Mode: GPS Only</option>
+        <option value="WIFI_OR_GPS" {% if hospital_setting.verification_mode == "WIFI_OR_GPS" %}selected{% endif %}>📶/📍 Mode: Wi-Fi OR GPS</option>
+        <option value="BOTH" {% if hospital_setting.verification_mode == "BOTH" %}selected{% endif %}>🔒 Mode: Wi-Fi + GPS (Both)</option>
+      </select>
+    </form>
+
+    <a href="{% url 'attendance_report' %}" class="btn btn-light btn-small">
+      <span>🏛️</span> Hospital Report
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+<!-- "Put Attendance" Button & Dual Verification Section -->
+<div class="panel"
+  style="padding: 22px 24px; margin-bottom: 24px; background: #ffffff; border-radius: 14px; border: 1px solid var(--border); box-shadow: 0 4px 18px rgba(30, 41, 59, 0.04);">
+
+  <div
+    style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 16px;">
+    <div>
+      <h3 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 700;">Mark Today's Attendance</h3>
+      <p class="muted" style="margin: 0; font-size: 13px;">
+        Date: <strong>{% now "d F Y" %}</strong> &bull;
+        Verification Rule:
+        <span
+          style="font-weight: 700; color: #1e40af; background: #eff6ff; padding: 2px 8px; border-radius: 4px; border: 1px solid #bfdbfe;">
+          {{ hospital_setting.get_verification_mode_display }}
+        </span>
+      </p>
+    </div>
+
+    <div>
+      {% if not today_marked %}
+      <form method="post" id="attendanceForm" style="margin: 0;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="put_attendance">
+        <input type="hidden" name="latitude" id="employeeLat">
+        <input type="hidden" name="longitude" id="employeeLon">
+
+        <button type="button" id="putAttendanceBtn" onclick="handlePutAttendance()" class="btn btn-primary"
+          style="padding: 13px 36px; font-size: 15px; font-weight: 700; border-radius: 10px; cursor: pointer; transition: all 0.2s ease;">
+          <span id="btnIcon">📝</span> <span id="btnText">Put Attendance</span>
+        </button>
+      </form>
+      {% else %}
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+        <button type="button" class="btn btn-success" disabled
+          style="padding: 12px 28px; font-size: 15px; font-weight: 700; border-radius: 10px; cursor: default; opacity: 1;">
+          ✓ Attendance Marked (Present)
+        </button>
+        {% if today_record.verification_source %}
+        <small class="muted" style="font-size: 11px;">Verified via {{ today_record.verification_source }}</small>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Real-Time Verification Status Cards (Wi-Fi + GPS) -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;">
+
+    <!-- 1. Wi-Fi Status Card -->
+    {% if is_on_hospital_wifi %}
+      <div id="wifiStatusCard" class="wifi-status-card connected">
+    {% else %}
+      <div id="wifiStatusCard" class="wifi-status-card disconnected">
+    {% endif %}
+      <span style="font-size: 20px;">{% if is_on_hospital_wifi %}📶{% else %}⚠️{% endif %}</span>
+      <div>
+        <div style="font-weight: 700;">
+          {% if is_on_hospital_wifi %}
+          Connected to Hospital Wi-Fi
+          {% else %}
+          Not on Hospital Wi-Fi
+          {% endif %}
+        </div>
+        <div style="font-size: 12px; opacity: 0.9;">
+          {% if is_on_hospital_wifi %}
+          Authorized on network: <strong>{{ hospital_setting.wifi_name }}</strong> (IP: {{ client_ip }})
+          {% else %}
+          Detected IP: <code>{{ client_ip }}</code>. Must be connected to <strong>{{ hospital_setting.wifi_name
+            }}</strong>.
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. GPS Location Status Card -->
+    <div id="locationStatusCard"
+      style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; background: #f8fafc; border: 1px solid #e2e8f0; color: #475569;">
+      <span id="locationStatusIcon" style="font-size: 20px;">🔍</span>
+      <div>
+        <div id="locationStatusTitle" style="font-weight: 700;">GPS Location Status</div>
+        <div id="locationStatusText" style="font-size: 12px; opacity: 0.9;">Acquiring GPS location...</div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Quick Present / Absent Counters -->
+<div class="stats-grid" style="grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 22px;">
+  <article class="stat-card green">
+    <div class="stat-label">Days Present</div>
+    <div class="stat-value" style="color: #16a34a;">{{ present_count }}</div>
+  </article>
+
+  <article class="stat-card red" style="border-left: 4px solid #dc2626;">
+    <div class="stat-label">Days Absent</div>
+    <div class="stat-value" style="color: #dc2626;">{{ absent_count }}</div>
+  </article>
+</div>
+
+<!-- Table showing ONLY that person's history (Present & Absent days) -->
+<section class="panel">
+  <div class="panel-heading" style="padding: 16px 20px; border-bottom: 1px solid var(--border);">
+    <h3 style="margin: 0; font-size: 16px;">Attendance History (Since Joining: {{ joining_date|date:"d M Y" }})</h3>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Day</th>
+          <th>Status</th>
+          <th>Check In</th>
+          <th>Check Out</th>
+          <th>Verification</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in attendance_history %}
+        <tr>
+          <td>
+            <strong>{{ row.date|date:"d M Y" }}</strong>
+          </td>
+          <td>
+            <span class="muted">{{ row.day }}</span>
+          </td>
+          <td>
+            {% if row.is_present %}
+            <span class="status-pill"
+              style="display: inline-block; padding: 4px 12px; font-size: 12px; font-weight: 700; border-radius: 6px; background: #dcfce7; color: #15803d;">
+              ● Present
+            </span>
+            {% else %}
+            <span class="status-pill"
+              style="display: inline-block; padding: 4px 12px; font-size: 12px; font-weight: 700; border-radius: 6px; background: #fee2e2; color: #b91c1c;">
+              ● Absent
+            </span>
+            {% endif %}
+          </td>
+          <td>
+            {% if row.check_in %}
+            <span style="font-weight: 600; color: #166534;">{{ row.check_in|date:"H:i" }}</span>
+            {% else %}
+            <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if row.check_out %}
+            <span style="font-weight: 600; color: #1e40af;">{{ row.check_out|date:"H:i" }}</span>
+            {% else %}
+            <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if row.verification_source %}
+            <span class="status-pill"
+              style="font-size: 11px; padding: 3px 8px; border-radius: 6px; background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe;"
+              title="IP: {{ row.ip_address|default:'N/A' }}">
+              {{ row.verification_source }}
+            </span>
+            {% else %}
+            <span class="muted">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="empty" style="text-align: center; padding: 30px; color: var(--muted);">
+            No attendance records found.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Configuration data container (prevents JavaScript IDE linter errors) -->
+<div id="attendanceConfig" data-hospital-lat="{{ hospital_setting.latitude|stringformat:'f' }}"
+  data-hospital-lon="{{ hospital_setting.longitude|stringformat:'f' }}"
+  data-allowed-radius="{{ hospital_setting.radius_meters }}"
+  data-verification-mode="{{ hospital_setting.verification_mode }}"
+  data-is-on-wifi="{{ is_on_hospital_wifi|yesno:'true,false' }}" data-wifi-name="{{ hospital_setting.wifi_name }}"
+  data-client-ip="{{ client_ip }}" style="display: none;"></div>
+
+<!-- Dual Verification & Geofence Script -->
+<script>
+  const configEl = document.getElementById("attendanceConfig");
+  const HOSPITAL_LAT = parseFloat(configEl ? configEl.dataset.hospitalLat : "12.9716");
+  const HOSPITAL_LON = parseFloat(configEl ? configEl.dataset.hospitalLon : "77.5946");
+  const ALLOWED_RADIUS = parseInt(configEl ? configEl.dataset.allowedRadius : "500", 10);
+  const VERIFICATION_MODE = configEl ? configEl.dataset.verificationMode : "WIFI_ONLY";
+  const IS_ON_HOSPITAL_WIFI = configEl ? configEl.dataset.isOnWifi === "true" : false;
+  const WIFI_NAME = configEl ? configEl.dataset.wifiName : "Hospital Wi-Fi";
+  const CLIENT_IP = configEl ? configEl.dataset.clientIp : "";
+
+  let userLatitude = null;
+  let userLongitude = null;
+  let isInsidePremises = false;
+  let locationChecked = false;
+
+  function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000; // meters
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  function updateLocationStatusUI(status, message, distance) {
+    const card = document.getElementById("locationStatusCard");
+    const icon = document.getElementById("locationStatusIcon");
+    const title = document.getElementById("locationStatusTitle");
+    const text = document.getElementById("locationStatusText");
+    if (!card || !icon || !text || !title) return;
+
+    if (status === "inside") {
+      card.style.background = "#dcfce7";
+      card.style.borderColor = "#86efac";
+      card.style.color = "#15803d";
+      icon.textContent = "📍";
+      title.textContent = "Inside Hospital Premises";
+      text.innerHTML = `Within allowed area (~${Math.round(distance)}m from center, max ${ALLOWED_RADIUS}m).`;
+    } else if (status === "outside") {
+      card.style.background = "#fee2e2";
+      card.style.borderColor = "#fca5a5";
+      card.style.color = "#b91c1c";
+      icon.textContent = "⚠️";
+      title.textContent = "Outside Hospital Premises";
+      const distStr = distance >= 1000 ? `${(distance / 1000).toFixed(2)} km` : `${Math.round(distance)} meters`;
+      text.innerHTML = `Currently <strong>${distStr}</strong> away (Allowed: within ${ALLOWED_RADIUS}m).`;
+    } else if (status === "denied") {
+      card.style.background = "#fef3c7";
+      card.style.borderColor = "#fcd34d";
+      card.style.color = "#92400e";
+      icon.textContent = "⚠️";
+      title.textContent = "Location Permission Required";
+      text.textContent = "Please allow location access if marking attendance via GPS.";
+    } else if (status === "checking") {
+      card.style.background = "#eff6ff";
+      card.style.borderColor = "#bfdbfe";
+      card.style.color = "#1d4ed8";
+      icon.textContent = "🔍";
+      title.textContent = "Detecting GPS Position";
+      text.textContent = message || "Acquiring coordinates...";
+    }
+  }
+
+  function acquireLocation(onSuccess, onError) {
+    if (!navigator.geolocation) {
+      updateLocationStatusUI("denied", "Geolocation is not supported by your browser.");
+      if (onError) onError();
+      return;
+    }
+
+    updateLocationStatusUI("checking", "Requesting current GPS position...");
+
+    navigator.geolocation.getCurrentPosition(
+      function (position) {
+        userLatitude = position.coords.latitude;
+        userLongitude = position.coords.longitude;
+        locationChecked = true;
+
+        const empLatField = document.getElementById("employeeLat");
+        const empLonField = document.getElementById("employeeLon");
+        if (empLatField) empLatField.value = userLatitude;
+        if (empLonField) empLonField.value = userLongitude;
+
+        const dist = calculateDistance(HOSPITAL_LAT, HOSPITAL_LON, userLatitude, userLongitude);
+        if (dist <= ALLOWED_RADIUS) {
+          isInsidePremises = true;
+          updateLocationStatusUI("inside", "", dist);
+        } else {
+          isInsidePremises = false;
+          updateLocationStatusUI("outside", "", dist);
+        }
+
+        if (onSuccess) onSuccess();
+      },
+      function (err) {
+        locationChecked = true;
+        isInsidePremises = false;
+        updateLocationStatusUI("denied");
+        if (onError) onError(err);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+  }
+
+  function handlePutAttendance() {
+    const btn = document.getElementById("putAttendanceBtn");
+    const btnText = document.getElementById("btnText");
+    const form = document.getElementById("attendanceForm");
+
+    // Case 1: Wi-Fi Only Mode
+    if (VERIFICATION_MODE === "WIFI_ONLY") {
+      if (!IS_ON_HOSPITAL_WIFI) {
+        alert("Attendance Rejected: You must be connected to the " + WIFI_NAME + " network.\n\nYour detected IP: " + CLIENT_IP + "\n\nPlease connect to Hospital Wi-Fi to mark attendance.");
+        return;
+      }
+      if (btnText) btnText.textContent = "Submitting Attendance...";
+      btn.disabled = true;
+      form.submit();
+      return;
+    }
+
+    // Case 2: Wi-Fi OR GPS Mode
+    if (VERIFICATION_MODE === "WIFI_OR_GPS") {
+      if (IS_ON_HOSPITAL_WIFI) {
+        // Staff is connected to hospital Wi-Fi! They can submit directly.
+        if (btnText) btnText.textContent = "Submitting Attendance...";
+        btn.disabled = true;
+        form.submit();
+        return;
+      }
+      // If not on Wi-Fi, proceed to GPS check
+    }
+
+    // Case 3: GPS Required (GPS_ONLY, BOTH, or fallback from WIFI_OR_GPS)
+    if (!userLatitude || !userLongitude) {
+      if (btnText) btnText.textContent = "Verifying Location...";
+      acquireLocation(
+        function () {
+          validateAndSubmit(form, btn, btnText);
+        },
+        function () {
+          if (btnText) btnText.textContent = "Put Attendance";
+          alert("Location access is required to mark attendance. Please allow browser location access.");
+        }
+      );
+      return;
+    }
+
+    validateAndSubmit(form, btn, btnText);
+  }
+
+  function validateAndSubmit(form, btn, btnText) {
+    if (VERIFICATION_MODE === "BOTH") {
+      if (!IS_ON_HOSPITAL_WIFI) {
+        alert("Attendance Rejected: You must be connected to the " + WIFI_NAME + " network (IP: " + CLIENT_IP + ").");
+        if (btnText) btnText.textContent = "Put Attendance";
+        return;
+      }
+      if (!isInsidePremises) {
+        alert("Attendance Rejected: You must also be within " + ALLOWED_RADIUS + "m of hospital premises.");
+        if (btnText) btnText.textContent = "Put Attendance";
+        return;
+      }
+    } else if (VERIFICATION_MODE === "GPS_ONLY" || VERIFICATION_MODE === "WIFI_OR_GPS") {
+      if (!isInsidePremises && !IS_ON_HOSPITAL_WIFI) {
+        const dist = calculateDistance(HOSPITAL_LAT, HOSPITAL_LON, userLatitude, userLongitude);
+        const distStr = dist >= 1000 ? `${(dist / 1000).toFixed(2)} km` : `${Math.round(dist)} meters`;
+        alert("Attendance Rejected: You are currently " + distStr + " away from the hospital.\n\nYou must be connected to Hospital Wi-Fi OR within " + ALLOWED_RADIUS + "m of hospital premises.");
+        if (btnText) btnText.textContent = "Put Attendance";
+        return;
+      }
+    }
+
+    if (btnText) btnText.textContent = "Submitting...";
+    btn.disabled = true;
+    form.submit();
+  }
+
+  function setHospitalToCurrentLocation() {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser.");
+      return;
+    }
+    if (!confirm("Set Hospital Center coordinates to your current GPS position? Staff within " + ALLOWED_RADIUS + "m will be permitted to mark attendance.")) {
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      function (pos) {
+        document.getElementById("adminLat").value = pos.coords.latitude;
+        document.getElementById("adminLon").value = pos.coords.longitude;
+        document.getElementById("adminLocationForm").submit();
+      },
+      function (err) {
+        alert("Unable to acquire your current GPS coordinates: " + err.message);
+      },
+      { enableHighAccuracy: true }
+    );
+  }
+
+  // Pre-fetch location on load if GPS is relevant
+  document.addEventListener("DOMContentLoaded", function () {
+    if (VERIFICATION_MODE !== "WIFI_ONLY") {
+      acquireLocation();
+    } else {
+      const card = document.getElementById("locationStatusCard");
+      if (card) {
+        card.style.background = "#f8fafc";
+        card.style.borderColor = "#e2e8f0";
+        card.style.color = "#64748b";
+        document.getElementById("locationStatusIcon").textContent = "ℹ️";
+        document.getElementById("locationStatusTitle").textContent = "GPS Not Required";
+        document.getElementById("locationStatusText").textContent = "Current verification mode is Hospital Wi-Fi Only.";
+      }
+    }
+  });
+</script>
+{% endblock %}

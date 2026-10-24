@@ -1,0 +1,17 @@
+{% extends "hr/base.html" %}
+{% block title %}Employees | Hospital HRMS{% endblock %}
+{% block page_heading %}Employee Management{% endblock %}
+{% block content %}
+<div class="page-toolbar"><div><h2>Hospital employees</h2><p class="muted">Manage doctors, nurses, technicians and support staff.</p></div><a class="btn btn-primary" href="{% url 'employee_create' %}">＋ Add employee</a></div>
+<form method="get" class="filter-bar">
+  <input type="search" name="q" value="{{ request.GET.q }}" placeholder="Search name, ID or email">
+  <select name="department"><option value="">All departments</option>{% for department in departments %}<option value="{{ department.id }}" {% if request.GET.department == department.id|stringformat:"s" %}selected{% endif %}>{{ department.name }}</option>{% endfor %}</select>
+  <select name="status"><option value="">All statuses</option><option value="ACTIVE" {% if request.GET.status == "ACTIVE" %}selected{% endif %}>Active</option><option value="INACTIVE" {% if request.GET.status == "INACTIVE" %}selected{% endif %}>Inactive</option><option value="ON_LEAVE" {% if request.GET.status == "ON_LEAVE" %}selected{% endif %}>On leave</option></select>
+  <button class="btn btn-primary" type="submit">Filter</button><a class="btn btn-light" href="{% url 'employee_list' %}">Clear</a>
+</form>
+<section class="panel"><div class="table-wrap"><table><thead><tr><th>Employee</th><th>Designation</th><th>Department</th><th>Type</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+{% for employee in employees %}
+<tr><td><div class="person-cell"><span class="avatar avatar-small">{{ employee.name|first|upper }}</span><span><strong>{{ employee.name }}</strong><small>{{ employee.employee_id }} · {{ employee.email }}</small></span></div></td><td>{{ employee.designation }}</td><td>{{ employee.department.name }}</td><td>{{ employee.get_staff_type_display }}</td><td><span class="status status-{{ employee.status|lower }}">{{ employee.get_status_display }}</span></td><td class="actions"><a href="{% url 'employee_profile' employee.pk %}">Profile</a><a href="{% url 'employee_edit' employee.pk %}">Edit</a></td></tr>
+{% empty %}<tr><td colspan="6" class="empty">No employees found. Add an employee to get started.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}

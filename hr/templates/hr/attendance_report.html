@@ -1,0 +1,247 @@
+{% extends "hr/base.html" %}
+{% block title %}Attendance Report | Hospital HRMS{% endblock %}
+{% block page_heading %}Attendance Report{% endblock %}
+
+{% block content %}
+<div class="page-toolbar">
+  <div>
+    <h2>Daily Attendance Report</h2>
+    <p class="muted">Review recorded check-in and check-out times, preview records, and export to Excel or PDF.</p>
+  </div>
+  <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+    {% if is_hr_admin %}
+      <!-- Register Current Wi-Fi -->
+      <form method="post" style="display: inline;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="register_hospital_wifi">
+        <button type="submit" class="btn btn-light btn-small" title="Register your current Wi-Fi network (IP: {{ client_ip }}) as authorized Hospital Wi-Fi" onclick="return confirm('Register current network (IP: {{ client_ip }}) as authorized {{ hospital_setting.wifi_name }}?');">
+          <span>📶</span> Register Current Wi-Fi
+        </button>
+      </form>
+
+      <!-- Calibrate Hospital GPS -->
+      <form method="post" id="adminLocationForm" style="display: inline;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="set_hospital_location">
+        <input type="hidden" name="latitude" id="adminLat">
+        <input type="hidden" name="longitude" id="adminLon">
+        <button type="button" class="btn btn-light btn-small" onclick="setHospitalToCurrentLocation()" title="Set Hospital Geofence center to your current device GPS location (Radius: {{ hospital_setting.radius_meters }}m)">
+          <span>📍</span> Calibrate GPS
+        </button>
+      </form>
+
+      <!-- Mode Selector -->
+      <form method="post" style="display: inline-flex; align-items: center; gap: 4px;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="update_verification_settings">
+        <select name="verification_mode" onchange="this.form.submit()" style="padding: 5px 8px; font-size: 12px; font-weight: 600; border-radius: 6px; border: 1px solid var(--border); background: #ffffff; cursor: pointer;" title="Change Verification Requirement">
+          <option value="WIFI_ONLY" {% if hospital_setting.verification_mode == "WIFI_ONLY" %}selected{% endif %}>📶 Mode: Wi-Fi Only</option>
+          <option value="GPS_ONLY" {% if hospital_setting.verification_mode == "GPS_ONLY" %}selected{% endif %}>📍 Mode: GPS Only</option>
+          <option value="WIFI_OR_GPS" {% if hospital_setting.verification_mode == "WIFI_OR_GPS" %}selected{% endif %}>📶/📍 Mode: Wi-Fi OR GPS</option>
+          <option value="BOTH" {% if hospital_setting.verification_mode == "BOTH" %}selected{% endif %}>🔒 Mode: Wi-Fi + GPS (Both)</option>
+        </select>
+      </form>
+    {% endif %}
+
+    {% if has_employee_profile %}
+      <a href="{% url 'attendance_report' %}?view=my_attendance" class="btn btn-light btn-small" title="View your personal attendance history">
+        <span>👤</span> View My Personal Attendance
+      </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Filter and Export Actions Bar -->
+<form method="get" class="filter-bar" style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
+  <label class="filter-label" style="display: flex; flex-direction: column; gap: 4px; font-weight: 500; font-size: 13px;">
+    <span>Date</span>
+    <input type="date" name="date" value="{{ selected_date|date:'Y-m-d' }}" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px;">
+  </label>
+
+  <label class="filter-label" style="display: flex; flex-direction: column; gap: 4px; font-weight: 500; font-size: 13px;">
+    <span>Department</span>
+    <select name="department" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; min-width: 170px;">
+      <option value="">All departments</option>
+      {% for department in departments %}
+        <option value="{{ department.id }}" {% if selected_department == department.id|stringformat:"s" %}selected{% endif %}>
+          {{ department.name }}
+        </option>
+      {% endfor %}
+    </select>
+  </label>
+
+  <label class="filter-label" style="display: flex; flex-direction: column; gap: 4px; font-weight: 500; font-size: 13px; flex: 1; min-width: 180px;">
+    <span>Search</span>
+    <input type="search" name="q" value="{{ query }}" placeholder="Search employee name or ID..." style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
+  </label>
+
+  <!-- Action Buttons -->
+  <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 2px;">
+    <button class="btn btn-primary" type="submit" name="export" value="" title="Preview report in table">
+      <span>🔍</span> Show Report
+    </button>
+    <button class="btn btn-success" type="submit" name="export" value="excel" title="Download Excel spreadsheet (.xlsx)">
+      <span>📊</span> Download Excel
+    </button>
+    <button class="btn btn-danger" type="submit" name="export" value="pdf" title="Download formatted PDF report (.pdf)">
+      <span>📄</span> Download PDF
+    </button>
+  </div>
+</form>
+
+<!-- Summary Cards -->
+<div class="stats-grid compact-stats">
+  <article class="stat-card green">
+    <div class="stat-label">Recorded Present</div>
+    <div class="stat-value">{{ present_count|default:"0" }}</div>
+  </article>
+
+  <article class="stat-card blue">
+    <div class="stat-label">Employees Listed</div>
+    <div class="stat-value">{{ employees_count|default:"0" }}</div>
+  </article>
+
+  <article class="stat-card purple">
+    <div class="stat-label">Report Date</div>
+    <div class="stat-value stat-date">{{ selected_date|date:"d M Y" }}</div>
+  </article>
+</div>
+
+<!-- Table & Rows Preview Panel -->
+<section class="panel">
+  <div class="panel-heading" style="padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+    <div>
+      <h3 style="margin: 0; font-size: 16px;">Attendance Report Preview</h3>
+      <p class="muted" style="margin: 4px 0 0; font-size: 13px;">
+        Showing attendance records for <strong>{{ selected_date|date:"d M Y" }}</strong>
+        {% if selected_department %}
+          for selected department
+        {% endif %}
+      </p>
+    </div>
+    
+    <div style="display: flex; gap: 8px;">
+      <a href="{{ export_excel_url }}" class="btn btn-success btn-small" title="Export current preview to Excel">
+        <span>📊</span> Export Excel (.xlsx)
+      </a>
+      <a href="{{ export_pdf_url }}" class="btn btn-danger btn-small" title="Export current preview to PDF">
+        <span>📄</span> Export PDF (.pdf)
+      </a>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Department</th>
+          <th>Shift</th>
+          <th>Check In</th>
+          <th>Check Out</th>
+          <th>Hours Worked</th>
+          <th>Verification / Network</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for record in attendance_records %}
+          <tr>
+            <td>
+              <strong>{{ record.employee.name }}</strong>
+              <small style="display: block; color: var(--muted); font-size: 11px;">{{ record.employee.employee_id }}</small>
+            </td>
+            <td>{{ record.employee.department.name }}</td>
+            <td>
+              {% if record.shift %}
+                <span class="status-pill pill-purple" style="font-size: 11px; padding: 2px 8px; border-radius: 6px;">{{ record.shift.name }}</span>
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if record.check_in %}
+                <span style="font-weight: 600; color: #166534;">{{ record.check_in|date:"H:i" }}</span>
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if record.check_out %}
+                <span style="font-weight: 600; color: #1e40af;">{{ record.check_out|date:"H:i" }}</span>
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              <span style="font-weight: 600;">{{ record.hours_worked }}</span>
+            </td>
+            <td>
+              {% if record.verification_source %}
+                <span class="status-pill" style="font-size: 11px; padding: 3px 8px; border-radius: 6px; background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe;" title="IP: {{ record.ip_address|default:'N/A' }}{% if record.latitude %} | GPS: {{ record.latitude }}, {{ record.longitude }}{% endif %}">
+                  {{ record.verification_source }}
+                </span>
+              {% elif record.latitude and record.longitude %}
+                <span class="status-pill" style="font-size: 11px; padding: 2px 6px; background: #e0f2fe; color: #0369a1;" title="Coordinates: {{ record.latitude }}, {{ record.longitude }}">
+                  📍 Verified
+                </span>
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if record.check_in and record.check_out %}
+                <span class="status-pill status-active" style="font-size: 11px; padding: 3px 8px; border-radius: 6px; background: #dcfce7; color: #166534;">Completed</span>
+              {% elif record.check_in %}
+                <span class="status-pill status-pending" style="font-size: 11px; padding: 3px 8px; border-radius: 6px; background: #fef3c7; color: #92400e;">Checked In</span>
+              {% else %}
+                <span class="status-pill" style="font-size: 11px; padding: 3px 8px; border-radius: 6px; background: #f1f5f9; color: #64748b;">Not Checked In</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="8" class="empty" style="text-align: center; padding: 36px 20px; color: var(--muted);">
+              <p style="font-size: 15px; margin-bottom: 6px;">No attendance records found for this date/filter.</p>
+              <small>Click "Show Report" with another date or add attendance logs in the system.</small>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="panel-footer" style="padding: 14px 20px; background: #fafbfc; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+    <span class="muted" style="font-size: 13px;">Total records: <strong>{{ attendance_records|length }}</strong></span>
+    <div style="display: flex; gap: 8px;">
+      <a class="btn btn-success btn-small" href="{{ export_excel_url }}"><span>📊</span> Download Excel (.xlsx)</a>
+      <a class="btn btn-danger btn-small" href="{{ export_pdf_url }}"><span>📄</span> Download PDF (.pdf)</a>
+    </div>
+  </div>
+</section>
+
+{% if is_hr_admin %}
+<script>
+  function setHospitalToCurrentLocation() {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser.");
+      return;
+    }
+    if (!confirm("Set Hospital Center coordinates to your current GPS position? Staff within {{ hospital_setting.radius_meters }}m will be permitted to mark attendance.")) {
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      function(pos) {
+        document.getElementById("adminLat").value = pos.coords.latitude;
+        document.getElementById("adminLon").value = pos.coords.longitude;
+        document.getElementById("adminLocationForm").submit();
+      },
+      function(err) {
+        alert("Unable to acquire your current GPS coordinates: " + err.message);
+      },
+      { enableHighAccuracy: true }
+    );
+  }
+</script>
+{% endif %}
+{% endblock %}

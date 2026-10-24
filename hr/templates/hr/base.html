@@ -1,0 +1,256 @@
+
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>{% block title %}Hospital HRMS{% endblock %}</title>
+
+    <link rel="stylesheet" href="{% static 'hr/css/theme.css' %}">
+    {% block extra_css %}{% endblock %}
+</head>
+
+<body>
+
+<div class="app-shell" id="appShell">
+
+    <!-- Mobile Sidebar Backdrop -->
+    <button
+        type="button"
+        class="sidebar-backdrop"
+        id="sidebarBackdrop"
+        aria-label="Close navigation menu"
+        tabindex="-1"
+    ></button>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar" aria-label="Main navigation">
+
+        <!-- Brand -->
+        <a class="brand" href="{% url 'dashboard' %}">
+            <span class="brand-mark">H+</span>
+
+            <span class="brand-text">
+                Hospital HRMS
+                <small>People &amp; Duty Management</small>
+            </span>
+        </a>
+
+        <!-- Navigation -->
+        <nav class="nav-links">
+
+            {% if perms.hr.view_dashboard %}
+                <a href="{% url 'dashboard' %}"
+                   class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                    <span class="nav-icon">▦</span>
+                    <span>Dashboard</span>
+                </a>
+            {% endif %}
+
+            {% if perms.hr.view_employee_pages %}
+                <a href="{% url 'employee_list' %}"
+                   class="{% if request.resolver_match.url_name == 'employee_list' or request.resolver_match.url_name == 'employee_create' or request.resolver_match.url_name == 'employee_edit' or request.resolver_match.url_name == 'employee_profile' %}active{% endif %}">
+                    <span class="nav-icon">♙</span>
+                    <span>Employees</span>
+                </a>
+            {% endif %}
+
+            {% if perms.hr.view_attendance_pages or request.user.employee_profile %}
+                <a href="{% url 'attendance_report' %}"
+                   class="{% if request.resolver_match.url_name == 'attendance_report' %}active{% endif %}">
+                    <span class="nav-icon">▤</span>
+                    <span>{% if request.user.is_superuser or perms.hr.manage_employee_pages %}Attendance Report{% else %}My Attendance{% endif %}</span>
+                </a>
+            {% endif %}
+
+            {% if perms.hr.view_leave_pages %}
+                <a href="{% url 'leave_list' %}"
+                   class="{% if request.resolver_match.url_name == 'leave_list' or request.resolver_match.url_name == 'leave_create' or request.resolver_match.url_name == 'leave_review' %}active{% endif %}">
+                    <span class="nav-icon">▣</span>
+                    <span>Leave Requests</span>
+                </a>
+            {% endif %}
+
+            {% if perms.hr.view_birthday_calendar %}
+                <a href="{% url 'birthday_calendar' %}"
+                   class="{% if request.resolver_match.url_name == 'birthday_calendar' %}active{% endif %}">
+                    <span class="nav-icon">♡</span>
+                    <span>Birthday Calendar</span>
+                </a>
+            {% endif %}
+
+            {% if request.user.is_superuser %}
+                <a href="{% url 'role_management' %}"
+                   class="{% if request.resolver_match.url_name == 'role_management' %}active{% endif %}">
+                    <span class="nav-icon">⚙</span>
+                    <span>Manage Roles</span>
+                </a>
+            {% endif %}
+
+            {% if request.user.is_staff %}
+                <a href="{% url 'admin:index' %}"
+                   class="{% if request.resolver_match.namespace == 'admin' %}active{% endif %}">
+                    <span class="nav-icon">⚙</span>
+                    <span>Django Admin</span>
+                </a>
+            {% endif %}
+
+        </nav>
+
+        <!-- Sidebar Bottom -->
+        <div class="sidebar-bottom">
+
+            <div class="signed-in">
+                <span>Signed in as</span>
+                <strong>{{ request.user.get_username }}</strong>
+            </div>
+
+            <form method="post" action="{% url 'logout' %}">
+                {% csrf_token %}
+
+                <button class="nav-logout" type="submit">
+                    <span class="nav-icon">↪</span>
+                    <span>Sign out</span>
+                </button>
+            </form>
+
+        </div>
+
+    </aside>
+
+    <!-- Main Area -->
+    <main class="main-area">
+
+        <!-- Header -->
+        <header class="topbar">
+
+            <div class="topbar-left">
+
+                <!-- Mobile Menu Button -->
+                <button
+                    type="button"
+                    class="mobile-menu-btn"
+                    id="mobileMenuBtn"
+                    aria-label="Open navigation menu"
+                    aria-controls="sidebar"
+                    aria-expanded="false"
+                >
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+
+                <div class="page-heading">
+                    <div class="eyebrow">
+                        HUMAN RESOURCE MANAGEMENT
+                    </div>
+
+                    <h1>
+                        {% block page_heading %}
+                            Hospital HRMS
+                        {% endblock %}
+                    </h1>
+                </div>
+
+            </div>
+
+            <div class="topbar-user">
+                <span class="avatar">
+                    {{ request.user.get_username|first|upper }}
+                </span>
+
+                <span class="topbar-username">
+                    {{ request.user.get_username }}
+                </span>
+            </div>
+
+        </header>
+
+        <!-- Page Content -->
+        <section class="page-content">
+
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags|default:'info' }}"
+                         role="status">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            {% block content %}
+            {% endblock %}
+
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            Hospital HRMS · Staff management workspace
+        </footer>
+
+    </main>
+
+</div>
+
+<!-- Sidebar Toggle -->
+<script>
+(function () {
+    const shell = document.getElementById("appShell");
+    const menuButton = document.getElementById("mobileMenuBtn");
+    const backdrop = document.getElementById("sidebarBackdrop");
+    const sidebar = document.getElementById("sidebar");
+
+    if (!shell || !menuButton || !backdrop || !sidebar) {
+        return;
+    }
+
+    function openSidebar() {
+        shell.classList.add("sidebar-open");
+        menuButton.setAttribute("aria-expanded", "true");
+        menuButton.setAttribute("aria-label", "Close navigation menu");
+        backdrop.setAttribute("tabindex", "0");
+    }
+
+    function closeSidebar() {
+        shell.classList.remove("sidebar-open");
+        menuButton.setAttribute("aria-expanded", "false");
+        menuButton.setAttribute("aria-label", "Open navigation menu");
+        backdrop.setAttribute("tabindex", "-1");
+    }
+
+    menuButton.addEventListener("click", function () {
+        if (shell.classList.contains("sidebar-open")) {
+            closeSidebar();
+        } else {
+            openSidebar();
+        }
+    });
+
+    backdrop.addEventListener("click", closeSidebar);
+
+    document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+            closeSidebar();
+        }
+    });
+
+    sidebar.querySelectorAll("a").forEach(function (link) {
+        link.addEventListener("click", function () {
+            if (window.innerWidth <= 768) {
+                closeSidebar();
+            }
+        });
+    });
+
+    window.addEventListener("resize", function () {
+        if (window.innerWidth > 768) {
+            closeSidebar();
+        }
+    });
+})();
+</script>
+
+</body>
+</html>

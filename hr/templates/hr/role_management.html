@@ -1,0 +1,433 @@
+ 
+{% extends "hr/base.html" %}
+
+{% block title %}Role Management | Hospital HRMS{% endblock %}
+{% block page_heading %}Role &amp; Permission Management{% endblock %}
+
+{% block content %}
+
+<style>
+    .role-panel {
+        margin-bottom: 24px;
+        padding: 24px;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 3px 14px rgba(35, 25, 70, 0.06);
+    }
+
+    .role-panel h2 {
+        margin: 0 0 12px;
+        color: #392b68;
+    }
+
+    .role-description {
+        color: #73738a;
+        line-height: 1.6;
+    }
+
+    .role-form-field {
+        margin: 20px 0;
+    }
+
+    .role-form-field label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 700;
+        color: #37304e;
+    }
+
+    .role-form-field input[type="text"] {
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 520px;
+        padding: 12px;
+        border: 1px solid #d9d5e8;
+        border-radius: 8px;
+        font-size: 14px;
+    }
+
+    .role-permission-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+    }
+
+    .role-permission {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px;
+        border: 1px solid #e2deef;
+        border-radius: 9px;
+        cursor: pointer;
+        line-height: 1.5;
+        transition: background-color 0.2s, border-color 0.2s;
+    }
+
+    .role-permission:hover {
+        background: #f7f4ff;
+        border-color: #8b5cf6;
+    }
+
+    .role-permission:has(input:checked) {
+        background: #f2edff;
+        border-color: #7952cc;
+    }
+
+    .role-permission input[type="checkbox"] {
+        width: 17px;
+        height: 17px;
+        flex-shrink: 0;
+        accent-color: #6d43b5;
+    }
+
+    .role-form-actions {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 24px;
+    }
+
+    .role-save-btn,
+    .role-cancel-btn,
+    .role-edit-btn {
+        display: inline-block;
+        padding: 10px 15px;
+        border: 0;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 700;
+        text-decoration: none;
+        cursor: pointer;
+    }
+
+    .role-save-btn {
+        background: #6246a5;
+        color: #fff;
+    }
+
+    .role-save-btn:hover {
+        background: #4c3285;
+    }
+
+    .role-cancel-btn {
+        background: #e9f3ff;
+        color: #245a91;
+    }
+
+    .role-edit-btn {
+        background: #e7f7ed;
+        color: #246b45;
+    }
+
+    .role-table-wrap {
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .roles-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .roles-table th,
+    .roles-table td {
+        padding: 15px 12px;
+        text-align: left;
+        vertical-align: top;
+        border-bottom: 1px solid #ebe8f2;
+    }
+
+    .roles-table th {
+        background: #f3efff;
+        color: #4c3285;
+        white-space: nowrap;
+    }
+
+    .roles-table tbody tr:hover {
+        background: #faf9ff;
+    }
+
+    .roles-table tbody tr.selected-role-row {
+        background: #f5f0ff;
+    }
+
+    .role-summary {
+        margin-top: 6px;
+        color: #77758a;
+        font-size: 12px;
+        line-height: 1.7;
+    }
+
+    .role-tag {
+        display: inline-block;
+        margin: 2px 3px 5px 0;
+        padding: 6px 9px;
+        border-radius: 6px;
+        background: #e7f7ed;
+        color: #315d49;
+        font-size: 12px;
+        line-height: 1.4;
+    }
+
+    .assigned-user {
+        margin-bottom: 12px;
+        overflow-wrap: anywhere;
+    }
+
+    .assigned-user strong {
+        display: block;
+        color: #363047;
+        font-size: 13px;
+    }
+
+    .assigned-user small {
+        display: block;
+        margin-top: 3px;
+        color: #77758a;
+        font-size: 12px;
+    }
+
+    .inactive-label {
+        color: #b42318 !important;
+    }
+
+    .empty-value {
+        color: #88869a;
+        font-size: 12px;
+        font-style: italic;
+    }
+
+    .editing-indicator {
+        display: inline-block;
+        margin-top: 6px;
+        padding: 4px 8px;
+        border-radius: 5px;
+        background: #ede9fe;
+        color: #6246a5;
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    .empty-table {
+        padding: 25px !important;
+        text-align: center !important;
+        color: #77758a;
+    }
+
+    @media (max-width: 600px) {
+        .role-panel {
+            padding: 16px;
+        }
+
+        .role-permission-list {
+            grid-template-columns: 1fr;
+        }
+
+        .roles-table th,
+        .roles-table td {
+            padding: 11px 9px;
+        }
+    }
+</style>
+
+<!-- CREATE / EDIT ROLE -->
+<div class="panel role-panel">
+
+    <h2>
+        {% if selected_group %}
+            Edit Role: {{ selected_group.name }}
+        {% else %}
+            Create New Role
+        {% endif %}
+    </h2>
+
+    <p class="role-description">
+        Choose the HRMS pages and actions users with this role can access.
+        Existing user assignments are displayed below.
+    </p>
+
+    <form method="post" class="form-layout">
+        {% csrf_token %}
+
+        {% if selected_group %}
+            <input
+                type="hidden"
+                name="group_id"
+                value="{{ selected_group.pk }}"
+            >
+        {% endif %}
+
+        <div class="role-form-field">
+            <label for="role_name">Role Name</label>
+
+            <input
+                type="text"
+                id="role_name"
+                name="role_name"
+                value="{{ role_name }}"
+                placeholder="e.g. Nurse, Doctor, HR Manager"
+                maxlength="150"
+                required
+            >
+        </div>
+
+        <h3>Page Permissions</h3>
+
+        <div class="role-permission-list">
+            {% for permission in permission_options %}
+                <label
+                    class="role-permission"
+                    for="permission_{{ permission.codename }}"
+                >
+                    <input
+                        type="checkbox"
+                        id="permission_{{ permission.codename }}"
+                        name="permissions"
+                        value="{{ permission.codename }}"
+                        {% if permission.codename in selected_permissions %}checked{% endif %}
+                    >
+
+                    <span>{{ permission.label }}</span>
+                </label>
+            {% empty %}
+                <p>
+                    No permission options are configured.
+                    Check ROLE_PERMISSION_OPTIONS in views.py.
+                </p>
+            {% endfor %}
+        </div>
+
+        <div class="role-form-actions">
+            <button type="submit" class="role-save-btn">
+                {% if selected_group %}
+                    Update Role
+                {% else %}
+                    Create Role
+                {% endif %}
+            </button>
+
+            {% if selected_group %}
+                <a
+                    href="{% url 'role_management' %}"
+                    class="role-cancel-btn"
+                >
+                    Cancel Editing
+                </a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<!-- EXISTING ROLES -->
+<div class="panel role-panel">
+
+    <h2>Existing Roles</h2>
+
+    <p class="role-description">
+        View each role's assigned users and HR permissions.
+    </p>
+
+    <div class="role-table-wrap">
+        <table class="roles-table">
+
+            <thead>
+                <tr>
+                    <th>Role</th>
+                    <th>Assigned Users</th>
+                    <th>Assigned Permissions</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for group in groups %}
+                    <tr {% if selected_group and group.pk == selected_group.pk %}class="selected-role-row"{% endif %}>
+
+                        <!-- ROLE -->
+                        <td>
+                            <strong>{{ group.name }}</strong>
+
+                            {% if selected_group and group.pk == selected_group.pk %}
+                                <div class="editing-indicator">
+                                    Currently Editing
+                                </div>
+                            {% endif %}
+
+                            <div class="role-summary">
+                                {{ group.assigned_user_count }} user{{ group.assigned_user_count|pluralize }}
+                                <br>
+                                {{ group.hr_permission_count }} HR permission{{ group.hr_permission_count|pluralize }}
+                            </div>
+                        </td>
+
+                        <!-- ASSIGNED USERS -->
+                        <td>
+                            {% for assigned_user in group.assigned_users %}
+                                <div class="assigned-user">
+                                    <strong>
+                                        {% if assigned_user.get_full_name %}
+                                            {{ assigned_user.get_full_name }}
+                                        {% else %}
+                                            {{ assigned_user.username }}
+                                        {% endif %}
+                                    </strong>
+
+                                    {% if assigned_user.email %}
+                                        <small>{{ assigned_user.email }}</small>
+                                    {% endif %}
+
+                                    {% if not assigned_user.is_active %}
+                                        <small class="inactive-label">
+                                            Inactive account
+                                        </small>
+                                    {% endif %}
+                                </div>
+                            {% empty %}
+                                <span class="empty-value">
+                                    No users assigned
+                                </span>
+                            {% endfor %}
+                        </td>
+
+                        <!-- ASSIGNED PERMISSIONS -->
+                        <td>
+                            {% for permission_label in group.hr_permission_labels %}
+                                <span class="role-tag">
+                                    {{ permission_label }}
+                                </span>
+                            {% empty %}
+                                <span class="empty-value">
+                                    No HR permissions assigned
+                                </span>
+                            {% endfor %}
+                        </td>
+
+                        <!-- ACTIONS -->
+                        <td>
+                            <a
+                                href="{% url 'role_management' %}?group_id={{ group.pk }}"
+                                class="role-edit-btn"
+                            >
+                                Edit
+                            </a>
+                        </td>
+
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="4" class="empty-table">
+                            No roles have been created yet.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+
+        </table>
+    </div>
+</div>
+
+{% endblock %}

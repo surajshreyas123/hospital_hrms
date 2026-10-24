@@ -1,0 +1,164 @@
+
+{% extends "hr/base.html" %}
+
+{% block title %}Leave Requests | Hospital HRMS{% endblock %}
+{% block page_heading %}Leave Management{% endblock %}
+
+{% block content %}
+
+<div class="page-toolbar">
+    <div>
+        <h2>{% if is_hr_admin %}Leave Requests{% else %}My Leave Requests{% endif %}</h2>
+        <p class="muted">
+            {% if is_hr_admin %}
+                Track hospital-wide leave applications and review decisions.
+            {% else %}
+                Track your personal leave applications and approval status.
+            {% endif %}
+        </p>
+    </div>
+
+    {% if perms.hr.apply_leave_requests or request.user.employee_profile %}
+        <a class="btn btn-primary" href="{% url 'leave_create' %}">
+            ＋ Apply for Leave
+        </a>
+    {% endif %}
+</div>
+
+<form method="get" class="filter-bar">
+    <select name="status">
+        <option value="">All statuses</option>
+
+        <option value="PENDING"
+            {% if request.GET.status == "PENDING" %}selected{% endif %}>
+            Pending
+        </option>
+
+        <option value="APPROVED"
+            {% if request.GET.status == "APPROVED" %}selected{% endif %}>
+            Approved
+        </option>
+
+        <option value="REJECTED"
+            {% if request.GET.status == "REJECTED" %}selected{% endif %}>
+            Rejected
+        </option>
+    </select>
+
+    <input
+        type="search"
+        name="q"
+        value="{{ request.GET.q }}"
+        placeholder="Search employee"
+    >
+
+    <button class="btn btn-primary" type="submit">
+        Filter
+    </button>
+</form>
+
+<section class="panel">
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Employee</th>
+                    <th>Dates</th>
+                    <th>Reason</th>
+                    <th>Status</th>
+                    <th>Reviewed By</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for leave in leave_requests %}
+                    <tr>
+                        <td>
+                            <strong>{{ leave.employee.name }}</strong>
+                            <small>{{ leave.employee.employee_id }}</small>
+                        </td>
+
+                        <td>
+                            {{ leave.start_date|date:"d M Y" }}
+                            –
+                            {{ leave.end_date|date:"d M Y" }}
+                        </td>
+
+                        <td>
+                            {{ leave.reason|truncatechars:70 }}
+                        </td>
+
+                        <td>
+                            <span class="status status-{{ leave.status|lower }}">
+                                {{ leave.get_status_display }}
+                            </span>
+                        </td>
+
+                        <td>
+                            {{ leave.reviewed_by|default:"—" }}
+                        </td>
+
+                        <td>
+                            {% if leave.status == "PENDING" and perms.hr.approve_leave_requests %}
+                                {% if leave.employee.user_id != request.user.id %}
+                                    {% if request.user.is_superuser or leave.employee.manager.user_id == request.user.id %}
+                                        <form
+                                            method="post"
+                                            action="{% url 'leave_review' leave.pk %}"
+                                            class="inline-actions"
+                                        >
+                                            {% csrf_token %}
+
+                                            <button
+                                                class="btn btn-small btn-success"
+                                                type="submit"
+                                                name="decision"
+                                                value="APPROVED"
+                                            >
+                                                Approve
+                                            </button>
+
+                                            <button
+                                                class="btn btn-small btn-danger"
+                                                type="submit"
+                                                name="decision"
+                                                value="REJECTED"
+                                            >
+                                                Reject
+                                            </button>
+                                        </form>
+                                    {% else %}
+                                        <span class="muted">
+                                            Not your report
+                                        </span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="muted">
+                                        Cannot review own request
+                                    </span>
+                                {% endif %}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                    </tr>
+
+                {% empty %}
+                    <tr>
+                        <td colspan="6" class="empty" style="text-align: center; padding: 36px 20px; color: var(--muted);">
+                            {% if is_hr_admin %}
+                                <p style="margin: 0 0 6px 0; font-size: 15px;">No leave requests found for this filter.</p>
+                            {% else %}
+                                <p style="margin: 0 0 6px 0; font-size: 15px;">You have not submitted any leave requests yet.</p>
+                                <small>Click "＋ Apply for Leave" above to submit a new leave application.</small>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "hr/base.html" %}
+{% block title %}Dashboard | Hospital HRMS{% endblock %}
+{% block page_heading %}Dashboard{% endblock %}
+{% block content %}
+<div class="welcome-row">
+  <div><h2>Welcome back, {{ request.user.get_username }}!</h2><p class="muted">Here is the hospital workforce overview for today.</p></div>
+  <span class="pill pill-purple">{{ today|date:"l, d M Y" }}</span>
+</div>
+<div class="stats-grid">
+  <article class="stat-card purple"><div class="stat-label">Total employees</div><div class="stat-value">{{ total_employees|default:"0" }}</div><div class="stat-note">Registered staff</div><span class="stat-icon">♙</span></article>
+  <article class="stat-card green"><div class="stat-label">Active employees</div><div class="stat-value">{{ active_employees|default:"0" }}</div><div class="stat-note">Currently active</div><span class="stat-icon">✓</span></article>
+  <article class="stat-card blue"><div class="stat-label">Present today</div><div class="stat-value">{{ present_today|default:"0" }}</div><div class="stat-note">Checked in today</div><span class="stat-icon">◷</span></article>
+  <article class="stat-card purple"><div class="stat-label">Pending leave</div><div class="stat-value">{{ pending_leaves|default:"0" }}</div><div class="stat-note">Awaiting review</div><span class="stat-icon">▣</span></article>
+</div>
+<div class="content-grid">
+  <section class="panel">
+    <div class="panel-heading"><div><h3>Recent leave requests</h3><p class="muted">Latest employee applications</p></div><a class="text-link" href="{% url 'leave_list' %}">View all →</a></div>
+    <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Leave dates</th><th>Status</th></tr></thead><tbody>
+    {% for leave in recent_leaves %}
+      <tr><td><strong>{{ leave.employee.name }}</strong><small>{{ leave.employee.employee_id }}</small></td><td>{{ leave.start_date|date:"d M Y" }} – {{ leave.end_date|date:"d M Y" }}</td><td><span class="status status-{{ leave.status|lower }}">{{ leave.get_status_display }}</span></td></tr>
+    {% empty %}<tr><td colspan="3" class="empty">No leave requests to display.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+  <section class="panel quick-panel"><div class="panel-heading"><div><h3>Quick actions</h3><p class="muted">Common HR tasks</p></div></div>
+    <a class="quick-link" href="{% url 'employee_create' %}"><span class="quick-icon purple-bg">＋</span><span><strong>Add employee</strong><small>Create a staff record</small></span><b>→</b></a>
+    <a class="quick-link" href="{% url 'attendance_report' %}"><span class="quick-icon blue-bg">▤</span><span><strong>Attendance report</strong><small>Review daily attendance</small></span><b>→</b></a>
+    <a class="quick-link" href="{% url 'leave_list' %}"><span class="quick-icon green-bg">✓</span><span><strong>Review leave</strong><small>Manage requests</small></span><b>→</b></a>
+    <a class="quick-link" href="{% url 'birthday_calendar' %}"><span class="quick-icon purple-bg">♡</span><span><strong>Birthdays</strong><small>View staff birthdays</small></span><b>→</b></a>
+  </section>
+</div>
+{% endblock %}

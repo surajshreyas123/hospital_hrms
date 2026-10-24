@@ -1,0 +1,17 @@
+{% extends "hr/base.html" %}
+{% block title %}{{ employee.name }} | Employee Profile{% endblock %}
+{% block page_heading %}Employee Profile{% endblock %}
+{% block content %}
+<div class="profile-hero panel">
+  <div class="profile-identity"><span class="profile-avatar">{{ employee.name|first|upper }}</span><div><span class="eyebrow">{{ employee.employee_id }}</span><h2>{{ employee.name }}</h2><p>{{ employee.designation }} · {{ employee.department.name }}</p><span class="status status-{{ employee.status|lower }}">{{ employee.get_status_display }}</span></div></div>
+  <a class="btn btn-primary" href="{% url 'employee_edit' employee.pk %}">Edit profile</a>
+</div>
+<div class="profile-grid">
+  <section class="panel"><h3>Personal &amp; work details</h3><dl class="details-list">
+    <dt>Email</dt><dd>{{ employee.email }}</dd><dt>Phone</dt><dd>{{ employee.phone }}</dd><dt>Staff type</dt><dd>{{ employee.get_staff_type_display }}</dd><dt>Department</dt><dd>{{ employee.department.name }}</dd><dt>Joining date</dt><dd>{{ employee.joining_date|date:"d M Y" }}</dd><dt>Birthday</dt><dd>{% if employee.birthday %}{{ employee.birthday|date:"d M Y" }}{% else %}Not provided{% endif %}</dd>
+  </dl></section>
+  <section class="panel"><h3>Attendance summary</h3><div class="profile-stat"><span>Recorded days worked</span><strong>{{ days_worked|default:"0" }}</strong></div><div class="profile-stat"><span>Attendance records</span><strong>{{ attendance_count|default:"0" }}</strong></div><h3 class="section-spaced">Recent leave requests</h3>
+    {% for leave in leave_requests %}<div class="list-row"><span>{{ leave.start_date|date:"d M Y" }} – {{ leave.end_date|date:"d M Y" }}</span><span class="status status-{{ leave.status|lower }}">{{ leave.get_status_display }}</span></div>{% empty %}<p class="muted">No leave history.</p>{% endfor %}
+  </section>
+</div>
+{% endblock %}
